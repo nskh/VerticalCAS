@@ -7,6 +7,7 @@ from keras.layers import Dense, Dropout, Activation
 import h5py
 from keras.optimizers import Adamax, Nadam
 import sys
+import pickle
 from writeNNet import saveNNet
 
 from interval import interval, inf
@@ -105,6 +106,10 @@ if len(sys.argv) > 1:
     opt = Nadam(learning_rate=0.0003)
     model.compile(loss=asymMSE, optimizer=opt, metrics=["accuracy"])
 
+    epoch_losses = []
+    epoch_accuracies = []
+    weights_before_projection = []
+    weights_after_projection = []
     for epoch in range(totalEpochs):
         # if epoch % 5 == 0:
         print(f"on epoch {epoch}")
@@ -126,23 +131,34 @@ if len(sys.argv) > 1:
         )
 
         dataset_batched = list(zip(x_batched, y_batched))
+        batch_losses = []
+        batch_accuracy_list = []
+        epoch_accuracy = keras.metrics.CategoricalAccuracy()
         for step, (x_batch_train, y_batch_train) in enumerate(dataset_batched):
-            if step % int(num_batches / 100) == 0:
-                print(
-                    f"{np.round(step / num_batches * 100, 2)}% through this epoch\r",
-                    end="",
-                )
             with tf.GradientTape() as tape:
                 y_pred = model(x_batch_train, training=True)  # Forward pass
-                # Compute the loss value
-                # (the loss function is configured in `compile()`)
                 loss = asymMSE(y_batch_train, y_pred)
+                epoch_accuracy.update_state(y_batch_train, y_pred)
 
+                # accumulate data
+                batch_losses.append(loss.numpy())
+                batch_accuracy_list.append(epoch_accuracy.result())
+            if step % int(num_batches / 500) == 0:
+                print(
+                    f"{np.round(step / num_batches * 100, 1)}% through this epoch with loss",
+                    f"{np.round(loss.numpy(), 5)} and accuracy {np.round(epoch_accuracy.result(), 5)}\r",
+                    end="",
+                )
             # Compute gradients
             trainable_vars = model.trainable_variables
             gradients = tape.gradient(loss, trainable_vars)
             # Update weights
             opt.apply_gradients(zip(gradients, trainable_vars))
+
+        epoch_accuracies.append(batch_accuracy_list)
+        epoch_losses.append(batch_losses)
+
+        weights_before_projection.append([w.numpy() for w in model.layers[-1].weights])
 
         # Parameters:
         # - h (ft): Altitude of intruder relative to ownship, [-8000, 8000]
@@ -190,29 +206,18 @@ if len(sys.argv) > 1:
                     graph=False,
                 )
                 print(f"After projecting, output interval is {output_interval}")
+                weights_after_projection.append(
+                    [w.numpy() for w in model.layers[-1].weights]
+                )
 
         else:
             print(f"safe region test passed, interval was {output_interval}")
 
-    #     Update metrics (includes the metric that tracks the loss)
-    #     model.compiled_metrics.update_state(Q, y_pred)
-    #     Return a dict mapping metric names to current value
-
-    # # Train and write nnet files
-    # epoch = saveEvery
-    # while epoch <= totalEpochs:
-    #     model.fit(X_train, Q, epochs=saveEvery, batch_size=2**8, shuffle=True)
-    #     saveFile = nnetFiles % (pra, ver, epoch)
-    #     saveNNet(model, saveFile, means, ranges, min_inputs, max_inputs)
-    #     epoch += saveEvery
-    #     output_interval, penultimate_interval = propagate_interval(
-    #         [
-    #             interval[7880, 7900],
-    #             interval[95, 96],
-    #             interval[-96, -95],
-    #             interval[38, 40],
-    #         ],
-    #         model,
-    #         graph=False,
-    #     )
-    #     print(output_interval)
+        with open("projection_acas.pickle", "wb") as f:
+            data = {
+                "accuracies": epoch_accuracies,
+                "losses": epoch_losses,
+                "weights_before_projection": weights_before_projection,
+                "weights_after_projection": weights_after_projection,
+            }
+            pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
