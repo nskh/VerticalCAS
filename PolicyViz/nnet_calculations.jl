@@ -1,6 +1,6 @@
 #Julia implementation of "load_network" function
 export NNet, evaluate_network, evaluate_network_multiple, num_inputs
-type NNet
+mutable struct NNet
     file::AbstractString
     weights::Array{Any,1}
     biases::Array{Any,1}

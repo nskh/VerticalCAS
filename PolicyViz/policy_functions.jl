@@ -1,17 +1,20 @@
 export get_belief,get_qval!,Policy,read_policy,evaluate
 
-type Policy
+using SparseArrays
+using LinearAlgebra
+
+mutable struct Policy
     alpha       :: Matrix{Float64}
     actions     :: Array{Int64,2}
     nactions    :: Int64
     qvals       :: Vector{Float64}
 
-    function Policy(alpha::Matrix{Float64}, actions::Array{Int64,2})
+    function Policy(alpha::LinearAlgebra.Adjoint{Float64, Matrix{Float64}}, actions::Array{Int64,2})
         return new(alpha, actions, size(actions,2), zeros(size(actions,2)))
     end # function Policy
 end
 
-function read_policy(actions::Array{Int64,2}, alpha::Matrix{Float64})
+function read_policy(actions::Array{Int64,2}, alpha::LinearAlgebra.Adjoint{Float64, Matrix{Float64}})
     return Policy(alpha, actions)
 end # function read_policy
 
