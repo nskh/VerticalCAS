@@ -14,9 +14,12 @@ from interval import interval, inf
 
 from safe_train import propagate_interval, check_intervals, project_weights
 
+from maraboupy import Marabou, MarabouCore
+
 ######## OPTIONS #########
 ver = 4  # Neural network version
 hu = 45  # Number of hidden units in each hidden layer in network
+saveEvery = 1  # Epoch frequency of saving
 totalEpochs = 20  # Total number of training epochs
 BATCH_SIZE = 2**8
 EPOCH_TO_PROJECT = 2
@@ -24,11 +27,18 @@ trainingDataFiles = (
     "../TrainingData/VertCAS_TrainingData_v2_%02d.h5"  # File format for training data
 )
 nnetFiles = "../networks/ProjectionVertCAS_pra%02d_v%d_45HU_%03d.nnet"  # File format for .nnet files
+# COC_INTERVAL = [
+#     interval[7880, 7900],
+#     interval[95, 96],
+#     interval[5, 6],
+#     interval[38, 40],
+# ]
+# After visualizing policy, new safe region
 COC_INTERVAL = [
-    interval[-1000, -900],
-    interval[50, 52],
-    interval[-1, 1],
-    interval[20, 22],
+    interval[400, 500],
+    interval[50, 51],
+    interval[-51, -50],
+    interval[20, 21],
 ]
 # COC high, SDES2500 low
 desired_interval = [
@@ -105,10 +115,13 @@ if len(sys.argv) > 1:
     opt = Nadam(learning_rate=0.0003)
     model.compile(loss=asymMSE, optimizer=opt, metrics=["accuracy"])
 
+    last_safe_weights = None
+    last_safe_epoch = 0
+    num_unsafe_epochs = 0
+
     epoch_losses = []
     epoch_accuracies = []
     weights_before_projection = []
-    weights_after_projection = []
     for epoch in range(totalEpochs):
         # if epoch % 5 == 0:
         print(f"on epoch {epoch}")
@@ -159,6 +172,11 @@ if len(sys.argv) > 1:
 
         weights_before_projection.append([w.numpy() for w in model.layers[-1].weights])
 
+        if epoch == 0:
+            last_safe_weights = model.get_weights()
+
+        # TODO here downward for Marabou integration
+
         # Parameters:
         # - h (ft): Altitude of intruder relative to ownship, [-8000, 8000]
         # - vO (ft/s): ownship vertical climb rate, [-100, 100]
@@ -169,55 +187,70 @@ if len(sys.argv) > 1:
             model,
             graph=False,
         )
-        if not check_intervals(output_interval, desired_interval):
-            print(f"safe region test FAILED, interval was {output_interval}")
-            if epoch % EPOCH_TO_PROJECT == 0:
-                print(f"\nProjecting weights at epoch {epoch}.")
-                intervals_to_project = []
-                assert type(output_interval) == type(desired_interval)
-                if type(output_interval) is list:
-                    assert len(output_interval) == len(desired_interval)
-                    for i in range(len(output_interval)):
-                        if (
-                            desired_interval[i] is not None
-                            and output_interval[i] not in desired_interval[i]
-                        ):
-                            intervals_to_project.append(i)
-                else:
-                    intervals_to_project.append(0)
 
-                weights_tf = model.layers[-1].weights
-                weights_np = weights_tf[0].numpy()
-                biases_np = weights_tf[1].numpy()
+        print("With Marabou:\n")
+        tf.saved_model.save(model, "tmp")
+        network = Marabou.read_tf("tmp", modelType="savedModel_v2")
 
-                for idx in intervals_to_project:
-                    weights_to_project = np.hstack([weights_np[:, idx], biases_np[idx]])
-                    proj = project_weights(
-                        desired_interval[idx], penultimate_interval, weights_to_project
-                    )
-                    weights_np[:, idx] = proj[:-1]
-                    biases_np[idx] = proj[-1]
+        inputVars = network.inputVars[0][0]
+        outputVars = network.outputVars[0][0]
 
-                model.layers[-1].set_weights([weights_np, biases_np])
-                output_interval, _ = propagate_interval(
-                    COC_INTERVAL,
-                    model,
-                    graph=False,
-                )
-                print(f"After projecting, output interval is {output_interval}")
-                weights_after_projection.append(
-                    [w.numpy() for w in model.layers[-1].weights]
-                )
+        print("input constraints")
+        for i, in_int in enumerate(COC_INTERVAL):
+            print(inputVars[i], ">", in_int[0].inf)
+            network.setLowerBound(inputVars[i], in_int[0].inf)
+            print(inputVars[i], "<", in_int[0].sup)
+            network.setUpperBound(inputVars[i], in_int[0].sup)
 
+        print("output constraints")
+        for i, des_int in enumerate(desired_interval):
+            if des_int is None:
+                continue
+            print(outputVars[i], ">", des_int[0].inf)
+            print(outputVars[i], "<", des_int[0].sup)
+
+            ineq1 = MarabouCore.Equation(MarabouCore.Equation.LE)
+            ineq1.addAddend(outputVars[i], 1)
+            ineq1.setScalar(des_int[0].inf)
+
+            ineq2 = MarabouCore.Equation(MarabouCore.Equation.GE)
+            ineq2.addAddend(outputVars[i], 1)
+            ineq2.setScalar(des_int[0].sup)
+            disjunction = [[ineq1], [ineq2]]
+            network.addDisjunctionConstraint(disjunction)
+
+        # Check relative ordering of outputs?
+        # print("Add max constraint")
+        # print(f"{outputVars[1]} should be max among outputVars")
+        # the_max_var_idx = 1
+        # for i, var in enumerate(outputVars):
+        #     if i == the_max_var_idx:
+        #         continue
+        #     print(f"{outputVars[the_max_var_idx]} - {outputVars[i]} < 0")
+        #     network.addInequality([outputVars[the_max_var_idx], outputVars[i]], [1, -1], 0)
+
+        _, vals, stats = network.solve("marabou.log")
+        if vals is None:
+            print("UNSAT. So safe region test passed.")
+            last_safe_weights = model.get_weights()
+            last_safe_epoch = epoch
+            num_unsafe_epochs = 0
         else:
-            print(f"safe region test passed, interval was {output_interval}")
+            print(f"safe region test FAILED, counterexample {vals}")
+            num_unsafe_epochs += 1
 
-        # Logging outputs
-        with open("projection_acas_july6_coc.pickle", "wb") as f:
+        if num_unsafe_epochs == 10:
+            print("Exploration budget exhausted.")
+            print("Restarting training from last safe epoch.")
+            model.set_weights(last_safe_weights)
+            num_unsafe_epochs = 0
+        else:
+            model.compiled_metrics.update_state(y, y_pred)
+
+        with open("exploration_budget_acas.pickle", "wb") as f:
             data = {
                 "accuracies": epoch_accuracies,
                 "losses": epoch_losses,
                 "weights_before_projection": weights_before_projection,
-                "weights_after_projection": weights_after_projection,
             }
             pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
