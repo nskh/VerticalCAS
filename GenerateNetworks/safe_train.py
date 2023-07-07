@@ -414,7 +414,10 @@ def plot_policy(model, filename=None, zoom=False, vo=0, vi=0, use_sisl_colors=Fa
         plt.figure()
         plt.tight_layout()
         for i in range(len(colors)):
-            plt.scatter(xs[i], ys[i], s=10, c=[colors[i]])
+            if use_sisl_colors:
+                plt.scatter(xs[i], ys[i], s=10, c=[colors[i]])
+            else:
+                plt.scatter(xs[i], ys[i], s=10)
         plt.legend(action_names)
         plt.xlabel("Tau (sec)")
         plt.ylabel("h (ft)")
