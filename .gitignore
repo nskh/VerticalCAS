@@ -2,3 +2,6 @@
 *.pyc
 PolicyViz/.ipynb*
 .vscode/
+.DS_store
+env/
+*.pdf
