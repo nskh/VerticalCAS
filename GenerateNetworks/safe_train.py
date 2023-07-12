@@ -353,6 +353,22 @@ def check_intervals(output_interval, goal_interval):
         return output_interval in goal_interval
 
 
+def normalize_point(x: np.array):
+    if type(x) is list:
+        x = np.array(x)
+    mean = np.array([0.0, 0.0, 0.0, 20.0])
+    ranges = np.array([16000.0, 200.0, 200.0, 40.0])
+    return (x - mean) / ranges
+
+
+def denormalize_point(p: np.array):
+    if type(p) is list:
+        p = np.array(p)
+    mean = np.array([0.0, 0.0, 0.0, 20.0])
+    ranges = np.array([16000.0, 200.0, 200.0, 40.0])
+    return p * ranges + mean
+
+
 def plot_policy(model, filename=None, zoom=False, vo=0, vi=0, use_sisl_colors=False):
     x_grid = None
     taus = np.linspace(0, 40, 81)
@@ -377,7 +393,8 @@ def plot_policy(model, filename=None, zoom=False, vo=0, vi=0, use_sisl_colors=Fa
         else:
             x_grid = grid_component
 
-    y_pred = model.predict(x_grid)
+    print("using normalized points")
+    y_pred = model.predict(normalize_point(x_grid))
     advisory_idxs = np.argmax(y_pred, axis=1)
 
     # dict indexed by color/advisory of all points
@@ -421,7 +438,7 @@ def plot_policy(model, filename=None, zoom=False, vo=0, vi=0, use_sisl_colors=Fa
         plt.legend(action_names)
         plt.xlabel("Tau (sec)")
         plt.ylabel("h (ft)")
-        plt.title(f"Policy for vo:{vo} and vi:{vi}")
+        plt.title(f"Zoomed Policy for vo:{vo} and vi:{vi}")
         plt.ylim([-2100, 2100])
         if filename is None:
             plt.savefig(f"viz_policy_vo{vo}_vi{vi}_zoomed.pdf")
