@@ -38,6 +38,9 @@ action_names = [
     "SCL2500",
 ]
 
+MEAN = np.array([0.0, 0.0, 0.0, 20.0])
+RANGES = np.array([16000.0, 200.0, 200.0, 40.0])
+
 
 def generate_data(NOISE_STD=2, M=0.5, B=5, xmin=5, xmax=55, n=30):
     x = np.linspace(xmin, xmax, n)
@@ -356,20 +359,27 @@ def check_intervals(output_interval, goal_interval):
 def normalize_point(x: np.array):
     if type(x) is list:
         x = np.array(x)
-    mean = np.array([0.0, 0.0, 0.0, 20.0])
-    ranges = np.array([16000.0, 200.0, 200.0, 40.0])
-    return (x - mean) / ranges
+    return (x - MEAN) / RANGES
 
 
 def denormalize_point(p: np.array):
     if type(p) is list:
         p = np.array(p)
-    mean = np.array([0.0, 0.0, 0.0, 20.0])
-    ranges = np.array([16000.0, 200.0, 200.0, 40.0])
-    return p * ranges + mean
+    return p * RANGES + MEAN
 
 
-def plot_policy(model, filename=None, zoom=False, vo=0, vi=0, use_sisl_colors=False):
+def normalize_interval(ivls):
+    if type(ivls) is list:
+        assert len(ivls) == 4
+    new_ivls = []
+    for i in range(4):
+        new_ivls.append((ivls[i] - MEAN[i]) / RANGES[i])
+    return new_ivls
+
+
+def plot_policy(
+    model, filename=None, zoom=False, vo=0, vi=0, use_sisl_colors=False, intervals=None
+):
     x_grid = None
     taus = np.linspace(0, 40, 81)
     hs = np.hstack(
