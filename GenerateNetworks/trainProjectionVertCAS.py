@@ -12,7 +12,14 @@ from writeNNet import saveNNet
 
 from interval import interval, inf
 
-from safe_train import propagate_interval, check_intervals, project_weights
+from safe_train import (
+    propagate_interval,
+    check_intervals,
+    project_weights,
+    normalize_interval,
+    normalize_point,
+    check_max_score,
+)
 
 ######## OPTIONS #########
 ver = 4  # Neural network version
@@ -30,6 +37,13 @@ COC_INTERVAL = [
     interval[-1, 1],
     interval[20, 22],
 ]
+DES_INTERVAL = [
+    interval[100, 110],
+    interval[0, 0.5],
+    interval[0, 0.5],
+    interval[20, 21],
+]
+
 # COC high, SDES2500 low
 desired_interval = [
     interval[7000, 15000],  # COC
@@ -42,6 +56,8 @@ desired_interval = [
     interval[-2000, 6000],  # SDES2500
     None,  # SCL2500
 ]
+# TODO make this dynamically set
+INTERVAL_WIDTH = 5
 advisories = {
     "COC": 0,
     "DNC": 1,
@@ -165,26 +181,31 @@ if len(sys.argv) > 1:
         # - vI (ft/s): intruder vertical climb rate, [-100, 100]
         # - τ (sec): time to loss of horizontal separation
         output_interval, penultimate_interval = propagate_interval(
-            COC_INTERVAL,
+            normalize_interval(
+                DES_INTERVAL
+            ),  # MAKE SURE to normalize interval for reasonable results
             model,
             graph=False,
         )
-        if not check_intervals(output_interval, desired_interval):
+        if not check_max_score(output_interval, advisories["DES1500"]):
             print(f"safe region test FAILED, interval was {output_interval}")
             if epoch % EPOCH_TO_PROJECT == 0:
                 print(f"\nProjecting weights at epoch {epoch}.")
                 intervals_to_project = []
-                assert type(output_interval) == type(desired_interval)
-                if type(output_interval) is list:
-                    assert len(output_interval) == len(desired_interval)
-                    for i in range(len(output_interval)):
-                        if (
-                            desired_interval[i] is not None
-                            and output_interval[i] not in desired_interval[i]
-                        ):
-                            intervals_to_project.append(i)
-                else:
-                    intervals_to_project.append(0)
+                # go through all intervals, find max upper bound
+                max_upper_bound = None
+                for advisory_interval, i in enumerate(output_interval):
+                    if i == advisories["DES1500"]:
+                        continue
+                    else:
+                        if max_upper_bound is None:
+                            max_upper_bound = advisory_interval[0].sup
+                        else:
+                            max_upper_bound = max(
+                                advisory_interval[0].sup, max_upper_bound
+                            )
+
+                intervals_to_project = [advisories["DES1500"]]
 
                 weights_tf = model.layers[-1].weights
                 weights_np = weights_tf[0].numpy()
@@ -193,14 +214,16 @@ if len(sys.argv) > 1:
                 for idx in intervals_to_project:
                     weights_to_project = np.hstack([weights_np[:, idx], biases_np[idx]])
                     proj = project_weights(
-                        desired_interval[idx], penultimate_interval, weights_to_project
+                        interval[max_upper_bound, max_upper_bound + INTERVAL_WIDTH],
+                        penultimate_interval,
+                        weights_to_project,
                     )
                     weights_np[:, idx] = proj[:-1]
                     biases_np[idx] = proj[-1]
 
                 model.layers[-1].set_weights([weights_np, biases_np])
                 output_interval, _ = propagate_interval(
-                    COC_INTERVAL,
+                    normalize_interval(DES_INTERVAL),
                     model,
                     graph=False,
                 )
@@ -208,6 +231,45 @@ if len(sys.argv) > 1:
                 weights_after_projection.append(
                     [w.numpy() for w in model.layers[-1].weights]
                 )
+        # if not check_intervals(output_interval, desired_interval):
+        #     print(f"safe region test FAILED, interval was {output_interval}")
+        #     if epoch % EPOCH_TO_PROJECT == 0:
+        #         print(f"\nProjecting weights at epoch {epoch}.")
+        #         intervals_to_project = []
+        #         assert type(output_interval) == type(desired_interval)
+        #         if type(output_interval) is list:
+        #             assert len(output_interval) == len(desired_interval)
+        #             for i in range(len(output_interval)):
+        #                 if (
+        #                     desired_interval[i] is not None
+        #                     and output_interval[i] not in desired_interval[i]
+        #                 ):
+        #                     intervals_to_project.append(i)
+        #         else:
+        #             intervals_to_project.append(0)
+
+        #         weights_tf = model.layers[-1].weights
+        #         weights_np = weights_tf[0].numpy()
+        #         biases_np = weights_tf[1].numpy()
+
+        #         for idx in intervals_to_project:
+        #             weights_to_project = np.hstack([weights_np[:, idx], biases_np[idx]])
+        #             proj = project_weights(
+        #                 desired_interval[idx], penultimate_interval, weights_to_project
+        #             )
+        #             weights_np[:, idx] = proj[:-1]
+        #             biases_np[idx] = proj[-1]
+
+        #         model.layers[-1].set_weights([weights_np, biases_np])
+        #         output_interval, _ = propagate_interval(
+        #             COC_INTERVAL,
+        #             model,
+        #             graph=False,
+        #         )
+        #         print(f"After projecting, output interval is {output_interval}")
+        #         weights_after_projection.append(
+        #             [w.numpy() for w in model.layers[-1].weights]
+        #         )
 
         else:
             print(f"safe region test passed, interval was {output_interval}")

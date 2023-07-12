@@ -356,6 +356,23 @@ def check_intervals(output_interval, goal_interval):
         return output_interval in goal_interval
 
 
+def check_max_score(output_interval, max_idx):
+    assert type(output_interval) is list, "Output interval was not list"
+    max_interval = output_interval[max_idx]
+    # Check if all other intervals have sups below max_interval's inf
+    # iterate: 0 -> max_idx-1
+    for advisory_interval in output_interval[:max_idx]:
+        if advisory_interval[0].sup > max_interval[0].inf:
+            return False
+
+    # iterate: max_idx + 1 -> end
+    for advisory_interval in output_interval[max_idx + 1 :]:
+        if advisory_interval[0].sup > max_interval[0].inf:
+            return False
+
+    return True
+
+
 def normalize_point(x: np.array):
     if type(x) is list:
         x = np.array(x)
@@ -368,7 +385,7 @@ def denormalize_point(p: np.array):
     return p * RANGES + MEAN
 
 
-def normalize_interval(ivls):
+def normalize_interval(ivls: list):
     if type(ivls) is list:
         assert len(ivls) == 4
     new_ivls = []
@@ -378,14 +395,23 @@ def normalize_interval(ivls):
 
 
 def plot_policy(
-    model, filename=None, zoom=False, vo=0, vi=0, use_sisl_colors=False, intervals=None
+    model: tf.keras.Model,
+    filename: str = None,
+    savefig: bool = False,
+    zoom: bool = False,
+    vo: float = 0,
+    vi: float = 0,
+    use_sisl_colors: bool = False,
+    intervals: list = None,
+    intervalcolor: str = None,
+    title: str = None,
 ):
     x_grid = None
     taus = np.linspace(0, 40, 81)
     hs = np.hstack(
         [
             np.linspace(-5000, -2000, 20),
-            np.linspace(-2000, 2000, 40),
+            np.linspace(-2000, 2000, 80),
             np.linspace(2000, 5000, 20),
         ]
     )
@@ -403,7 +429,6 @@ def plot_policy(
         else:
             x_grid = grid_component
 
-    print("using normalized points")
     y_pred = model.predict(normalize_point(x_grid))
     advisory_idxs = np.argmax(y_pred, axis=1)
 
@@ -417,44 +442,86 @@ def plot_policy(
         xs[advisory_idx].append(scatter_x)
         ys[advisory_idx].append(scatter_y)
 
-    plt.figure()
+    fig = plt.figure()
     plt.tight_layout()
     for i in range(len(colors)):
         if use_sisl_colors:
             plt.scatter(xs[i], ys[i], s=10, c=[colors[i]])
         else:
             plt.scatter(xs[i], ys[i], s=10)
-    plt.legend(action_names)
+
+    # add intervals
+    if intervals is not None:
+        ax = fig.gca()
+        tau_interval = intervals[3]  # x-coord
+        h_interval = intervals[0]  # y-coord
+        out_rect = matplotlib.patches.Rectangle(
+            (tau_interval[0].inf, h_interval[0].inf),  # lower left anchor
+            tau_interval[0].sup - tau_interval[0].inf,  # width
+            h_interval[0].sup - h_interval[0].inf,  # height
+            facecolor=intervalcolor if intervalcolor is not None else "b",
+            alpha=0.3,
+            edgecolor=intervalcolor if intervalcolor is not None else "b",
+        )
+        ax.add_patch(out_rect)
+
+    plt.legend(action_names + ["Input Region"], loc="upper right")
+
     plt.xlabel("Tau (sec)")
     plt.ylabel("h (ft)")
-    plt.title(f"Policy for vo:{vo} and vi:{vi}")
-    if filename is None:
-        plt.savefig(f"viz_policy_vo{vo}_vi{vi}.pdf")
+    if title is None:
+        plt.title(f"Policy for vo:{vo} and vi:{vi}")
     else:
-        if filename[-4:] == ".pdf":
-            plt.savefig(filename)
+        plt.title(title)
+    if savefig:
+        if filename is None:
+            plt.savefig(f"viz_policy_vo{vo}_vi{vi}.pdf")
         else:
-            plt.savefig(filename + ".pdf")
+            if filename[-4:] == ".pdf":
+                plt.savefig(filename)
+            else:
+                plt.savefig(filename + ".pdf")
     plt.show()
 
     if zoom:
-        plt.figure()
+        fig = plt.figure()
+        ax = fig.gca()
         plt.tight_layout()
         for i in range(len(colors)):
             if use_sisl_colors:
                 plt.scatter(xs[i], ys[i], s=10, c=[colors[i]])
             else:
                 plt.scatter(xs[i], ys[i], s=10)
-        plt.legend(action_names)
+        # add intervals
+        if intervals is not None:
+            ax = fig.gca()
+            tau_interval = intervals[3]  # x-coord
+            h_interval = intervals[0]  # y-coord
+            out_rect = matplotlib.patches.Rectangle(
+                (tau_interval[0].inf, h_interval[0].inf),  # lower left anchor
+                tau_interval[0].sup - tau_interval[0].inf,  # width
+                h_interval[0].sup - h_interval[0].inf,  # height
+                facecolor=intervalcolor if intervalcolor is not None else "b",
+                alpha=0.3,
+                edgecolor=intervalcolor if intervalcolor is not None else "b",
+            )
+            ax.add_patch(out_rect)
+            plt.xlim([0, 40])
+
+        plt.legend(action_names + ["Input Region"], loc="upper right")
         plt.xlabel("Tau (sec)")
         plt.ylabel("h (ft)")
-        plt.title(f"Zoomed Policy for vo:{vo} and vi:{vi}")
-        plt.ylim([-2100, 2100])
-        if filename is None:
-            plt.savefig(f"viz_policy_vo{vo}_vi{vi}_zoomed.pdf")
+        if title is None:
+            plt.title(f"Zoomed Policy for vo:{vo} and vi:{vi}")
         else:
-            if filename[-4:] == ".pdf":
-                plt.savefig(filename[:-4] + "_zoomed.pdf")
+            plt.title(f"Zoomed {title}")
+        plt.ylim([-1100, 1100])
+        if savefig:
+            if filename is None:
+                plt.savefig(f"viz_policy_vo{vo}_vi{vi}_zoomed.pdf")
             else:
-                plt.savefig(filename + "_zoomed.pdf")
+                if filename[-4:] == ".pdf":
+                    plt.savefig(filename[:-4] + "_zoomed.pdf")
+                else:
+                    plt.savefig(filename + "_zoomed.pdf")
         plt.show()
