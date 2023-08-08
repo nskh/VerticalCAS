@@ -6,6 +6,7 @@
 networks/
 GenerateNetworks/images/
 GenerateNetworks/pickles/
+GenerateNetworks/models/
 GenerateNetworks/tmp/
 PolicyViz/jl_*
 PolicyViz/.ipynb*
