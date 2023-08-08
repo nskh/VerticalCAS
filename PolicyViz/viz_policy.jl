@@ -1,4 +1,4 @@
-export viz_policy
+export viz_policy, viz_grid
 
 using Printf
 
