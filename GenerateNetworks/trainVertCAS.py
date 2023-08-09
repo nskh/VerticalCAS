@@ -8,7 +8,7 @@ import h5py
 from keras.optimizers import Adamax, Nadam
 import sys
 from writeNNet import saveNNet
-
+import maraboupy
 ######## OPTIONS #########
 ver = 4  # Neural network version
 hu = 45  # Number of hidden units in each hidden layer in network

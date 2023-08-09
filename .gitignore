@@ -10,3 +10,4 @@ GenerateNetworks/models/
 GenerateNetworks/tmp/
 PolicyViz/jl_*
 PolicyViz/.ipynb*
+GenerateNetworks/Marabou
