@@ -1,7 +1,12 @@
 *.h5
 *.pyc
-PolicyViz/.ipynb*
+.DS_Store
 .vscode/
-.DS_store
-env/
-*.pdf
+.ipynb_checkpoints/
+networks/
+GenerateNetworks/images/
+GenerateNetworks/pickles/
+GenerateNetworks/models/
+GenerateNetworks/tmp/
+PolicyViz/jl_*
+PolicyViz/.ipynb*
