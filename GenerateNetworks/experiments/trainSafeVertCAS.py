@@ -1,17 +1,21 @@
-import numpy as np
+import sys
 import math
+import numpy as np
 import tensorflow as tf
 import keras
 from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, Activation
 import h5py
 from keras.optimizers import Adamax, Nadam
-import sys
-from writeNNet import saveNNet
-
 from interval import interval, inf
 
-from safe_train import propagate_interval
+from GenerateNetworks.writeNNet import saveNNet
+from GenerateNetworks.utils.safe_train import propagate_interval
+
+######## CONFIG #########
+config = configparser.ConfigParser()
+config.read(os.environ.get("CONFIG_INI_PATH"))
+print(config.sections())
 
 ######## OPTIONS #########
 ver = 4  # Neural network version
@@ -21,11 +25,10 @@ totalEpochs = 20  # Total number of training epochs
 BATCH_SIZE = 2**8
 EPOCH_TO_PROJECT = 5
 trainingDataFiles = (
-    "../TrainingData/VertCAS_TrainingData_v2_%02d.h5"  # File format for training data
+    os.path.join(config['Paths']["training_data_dir"], "VertCAS_TrainingData_v2_%02d.h5")
 )
-nnetFiles = (
-    "../networks/SafeVertCAS_pra%02d_v%d_45HU_%03d.nnet"  # File format for .nnet files
-)
+nnetFiles = os.path.join(config["Paths"]["networks_dir"], "ProjectionVertCAS_pra%02d_v%d_45HU_%03d.nnet")
+
 advisories = {
     "COC": 0,
     "DNC": 1,

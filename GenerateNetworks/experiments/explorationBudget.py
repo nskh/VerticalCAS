@@ -8,13 +8,23 @@ import h5py
 from keras.optimizers import Adamax, Nadam
 import sys
 import pickle
-from writeNNet import saveNNet
 
 from interval import interval, inf
 
-from safe_train import propagate_interval, check_intervals, project_weights
+from GenerateNetworks.utils.safe_train import propagate_interval, check_intervals
+from GenerateNetworks.utils.projection_utils import project_weights
+from GenerateNetworks.writeNNet import saveNNet
+
+# NOTE marabou must be added to the python path
+# export PYTHONPATH=$PYTHONPATH:~/VerticalCAS/GenerateNetworks/Marabou
+# TODO find a way to nicely do this automatically
 
 from maraboupy import Marabou, MarabouCore
+
+######## CONFIG #########
+config = configparser.ConfigParser()
+config.read(os.environ.get("CONFIG_INI_PATH"))
+print(config.sections())
 
 ######## OPTIONS #########
 ver = 4  # Neural network version
@@ -24,9 +34,9 @@ totalEpochs = 20  # Total number of training epochs
 BATCH_SIZE = 2**8
 EPOCH_TO_PROJECT = 2
 trainingDataFiles = (
-    "../TrainingData/VertCAS_TrainingData_v2_%02d.h5"  # File format for training data
+    os.path.join(config['Paths']["training_data_dir"], "VertCAS_TrainingData_v2_%02d.h5")
 )
-nnetFiles = "../networks/ProjectionVertCAS_pra%02d_v%d_45HU_%03d.nnet"  # File format for .nnet files
+nnetFiles = os.path.join(config["Paths"]["networks_dir"], "ProjectionVertCAS_pra%02d_v%d_45HU_%03d.nnet")
 # COC_INTERVAL = [
 #     interval[7880, 7900],
 #     interval[95, 96],
