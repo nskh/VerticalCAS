@@ -13,3 +13,4 @@ PolicyViz/.ipynb*
 GenerateNetworks/Marabou
 config.ini
 *.egg-info
+*.log
