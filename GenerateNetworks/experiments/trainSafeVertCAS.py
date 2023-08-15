@@ -1,17 +1,21 @@
-import numpy as np
+import sys
+import configparser
 import math
+import os
+import h5py
+import numpy as np
 import tensorflow as tf
 import keras
 from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, Activation
-import h5py
 from keras.optimizers import Adamax, Nadam
-import sys
-from writeNNet import saveNNet
-
 from interval import interval, inf
 
-from safe_train import propagate_interval
+from GenerateNetworks.writeNNet import saveNNet
+from GenerateNetworks.utils.safe_train import propagate_interval
+from GenerateNetworks.utils.utils import *
+
+config = load_config()
 
 ######## OPTIONS #########
 ver = 4  # Neural network version
@@ -20,12 +24,14 @@ saveEvery = 3  # Epoch frequency of saving
 totalEpochs = 20  # Total number of training epochs
 BATCH_SIZE = 2**8
 EPOCH_TO_PROJECT = 5
+lossFactor = 40.0
+learningRate = 0.0003
+
 trainingDataFiles = (
-    "../TrainingData/VertCAS_TrainingData_v2_%02d.h5"  # File format for training data
+    os.path.join(config['Paths']["training_data_dir"], "VertCAS_TrainingData_v2_%02d.h5")
 )
-nnetFiles = (
-    "../networks/SafeVertCAS_pra%02d_v%d_45HU_%03d.nnet"  # File format for .nnet files
-)
+nnetFiles = os.path.join(config["Paths"]["networks_dir"], "ProjectionVertCAS_pra%02d_v%d_45HU_%03d.nnet")
+
 advisories = {
     "COC": 0,
     "DNC": 1,
@@ -43,61 +49,18 @@ advisories = {
 # The previous RA should be given as a command line input
 if len(sys.argv) > 1:
     pra = int(sys.argv[1])
-    print("Loading Data for VertCAS, pra %02d, Network Version %d" % (pra, ver))
-    f = h5py.File(trainingDataFiles % pra, "r")
-    X_train = np.array(f["X"])
-    Q = np.array(f["y"])
-    means = np.array(f["means"])
-    ranges = np.array(f["ranges"])
-    min_inputs = np.array(f["min_inputs"])
-    max_inputs = np.array(f["max_inputs"])
-    print(f"min inputs: {min_inputs}")
-    print(f"max inputs: {max_inputs}")
+
+    X_train, Q, means, ranges, min_inputs, max_inputs = load_training_data(pra, trainingDataFiles, ver)
 
     N, numOut = Q.shape
     print(f"Setting up model with {numOut} outputs and {N} training examples")
     num_batches = N / BATCH_SIZE
 
-    # Asymmetric loss function
-    lossFactor = 40.0
+    opt = Nadam(lr=learningRate)
+    model = create_model(numOut, hu, learningRate, lossFactor, opt)
 
-    # NOTE(nskh): from HorizontalCAS which was updated to use TF
-    def asymMSE(y_true, y_pred):
-        d = y_true - y_pred
-        maxes = tf.argmax(y_true, axis=1)
-        maxes_onehot = tf.one_hot(maxes, numOut)
-        others_onehot = maxes_onehot - 1
-        d_opt = d * maxes_onehot
-        d_sub = d * others_onehot
-        a = lossFactor * (numOut - 1) * (tf.square(d_opt) + tf.abs(d_opt))
-        b = tf.square(d_opt)
-        c = lossFactor * (tf.square(d_sub) + tf.abs(d_sub))
-        d = tf.square(d_sub)
-        loss = tf.where(d_sub > 0, c, d) + tf.where(d_opt > 0, a, b)
-        return tf.reduce_mean(loss)
-
-    # Define model architecture
-    model = Sequential()
-    # model.add(Dense(hu, init='uniform', activation='relu', input_dim=4))
-    # model.add(Dense(hu, init='uniform', activation='relu'))
-    # model.add(Dense(hu, init='uniform', activation='relu'))
-    # model.add(Dense(hu, init='uniform', activation='relu'))
-    # model.add(Dense(hu, init='uniform', activation='relu'))
-    # model.add(Dense(hu, init='uniform', activation='relu'))
-    model.add(Dense(hu, activation="relu", input_dim=4))
-    model.add(Dense(hu, activation="relu"))
-    model.add(Dense(hu, activation="relu"))
-    model.add(Dense(hu, activation="relu"))
-    model.add(Dense(hu, activation="relu"))
-    model.add(Dense(hu, activation="relu"))
-
-    # model.add(Dense(numOut, init="uniform"))
-    model.add(Dense(numOut))
-    opt = Nadam(learning_rate=0.0003)
-    model.compile(loss=asymMSE, optimizer=opt, metrics=["accuracy"])
-
-    # # Train and write nnet files
     epoch = saveEvery
+    # TODO epoch numbering is wonky here
     while epoch <= totalEpochs:
         model.fit(X_train, Q, epochs=saveEvery, batch_size=2**8, shuffle=True)
         saveFile = nnetFiles % (pra, ver, epoch)

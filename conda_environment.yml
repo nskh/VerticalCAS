@@ -1,0 +1,9 @@
+name: vertical-cas-env
+channels:
+  - defaults
+dependencies:
+      - matplotlib
+      - numpy
+      - onnxruntime
+      - tensorflow
+prefix: /opt/homebrew/Caskroom/miniconda/base/envs/vertical-cas-env

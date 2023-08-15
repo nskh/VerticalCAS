@@ -10,3 +10,7 @@ GenerateNetworks/models/
 GenerateNetworks/tmp/
 PolicyViz/jl_*
 PolicyViz/.ipynb*
+GenerateNetworks/Marabou
+config.ini
+*.egg-info
+*.log

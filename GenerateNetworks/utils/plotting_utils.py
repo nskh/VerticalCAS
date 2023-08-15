@@ -2,6 +2,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
+import tensorflow as tf
 
 # Constants
 ra1 = (0.9, 0.9, 0.9)  # white

@@ -1,25 +1,29 @@
-import numpy as np
+import os
+import sys
+import configparser
 import math
+import numpy as np
 import tensorflow as tf
+import pickle
+import h5py
+from interval import interval, inf
+
 import keras
 from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, Activation
-import h5py
 from keras.optimizers import Adamax, Nadam
-import sys
-import pickle
-from writeNNet import saveNNet
 
-from interval import interval, inf
-
-from safe_train import (
+from GenerateNetworks.writeNNet import saveNNet
+from GenerateNetworks.utils.safe_train import (
     propagate_interval,
     check_intervals,
-    project_weights,
-    normalize_interval,
-    normalize_point,
     check_max_score,
 )
+from GenerateNetworks.utils.projection_utils import project_weights
+from GenerateNetworks.utils.plotting_utils import normalize_point, normalize_interval
+from GenerateNetworks.utils.utils import *
+
+config = load_config()
 
 ######## OPTIONS #########
 ver = 4  # Neural network version
@@ -27,10 +31,14 @@ hu = 45  # Number of hidden units in each hidden layer in network
 totalEpochs = 20  # Total number of training epochs
 BATCH_SIZE = 2**8
 EPOCH_TO_PROJECT = 2
+lossFactor = 40.0
+learningRate = 0.0003
+
 trainingDataFiles = (
-    "../TrainingData/VertCAS_TrainingData_v2_%02d.h5"  # File format for training data
+    os.path.join(config['Paths']["training_data_dir"], "VertCAS_TrainingData_v2_%02d.h5")
 )
-nnetFiles = "../networks/ProjectionVertCAS_pra%02d_v%d_45HU_%03d.nnet"  # File format for .nnet files
+nnetFiles = os.path.join(config["Paths"]["networks_dir"], "ProjectionVertCAS_pra%02d_v%d_45HU_%03d.nnet")
+
 COC_INTERVAL = [
     interval[-1000, -900],
     interval[50, 52],
@@ -75,65 +83,23 @@ relative = False
 # The previous RA should be given as a command line input
 if len(sys.argv) > 1:
     pra = int(sys.argv[1])
-    print("Loading Data for VertCAS, pra %02d, Network Version %d" % (pra, ver))
-    f = h5py.File(trainingDataFiles % pra, "r")
-    X_train = np.array(f["X"])
-    Q = np.array(f["y"])
-    means = np.array(f["means"])
-    ranges = np.array(f["ranges"])
-    min_inputs = np.array(f["min_inputs"])
-    max_inputs = np.array(f["max_inputs"])
-    print(f"min inputs: {min_inputs}")
-    print(f"max inputs: {max_inputs}")
+    X_train, Q, means, ranges, min_inputs, max_inputs = load_training_data(pra, trainingDataFiles, ver)
 
     N, numOut = Q.shape
     print(f"Setting up model with {numOut} outputs and {N} training examples")
     num_batches = N / BATCH_SIZE
 
-    # Asymmetric loss function
-    lossFactor = 40.0
-
-    # NOTE(nskh): from HorizontalCAS which was updated to use TF
-    def asymMSE(y_true, y_pred):
-        d = y_true - y_pred
-        maxes = tf.argmax(y_true, axis=1)
-        maxes_onehot = tf.one_hot(maxes, numOut)
-        others_onehot = maxes_onehot - 1
-        d_opt = d * maxes_onehot
-        d_sub = d * others_onehot
-        a = lossFactor * (numOut - 1) * (tf.square(d_opt) + tf.abs(d_opt))
-        b = tf.square(d_opt)
-        c = lossFactor * (tf.square(d_sub) + tf.abs(d_sub))
-        d = tf.square(d_sub)
-        loss = tf.where(d_sub > 0, c, d) + tf.where(d_opt > 0, a, b)
-        return tf.reduce_mean(loss)
-
-    # Define model architecture
-    model = Sequential()
-    model.add(Dense(hu, activation="relu", input_dim=4))
-    model.add(Dense(hu, activation="relu"))
-    model.add(Dense(hu, activation="relu"))
-    model.add(Dense(hu, activation="relu"))
-    model.add(Dense(hu, activation="relu"))
-    model.add(Dense(hu, activation="relu"))
-
-    # model.add(Dense(numOut, init="uniform"))
-    model.add(Dense(numOut))
-    opt = Nadam(learning_rate=0.0003)
-    model.compile(loss=asymMSE, optimizer=opt, metrics=["accuracy"])
+    opt = Nadam(learning_rate=learningRate)
+    model = create_model(numOut, hu, learningRate, lossFactor, opt)
 
     epoch_losses = []
     epoch_accuracies = []
     weights_before_projection = []
     weights_after_projection = []
     for epoch in range(totalEpochs):
-        # if epoch % 5 == 0:
         print(f"on epoch {epoch}")
-
         rng = np.random.default_rng()
-
         train_indices = np.arange(X_train.shape[0])
-
         rng.shuffle(train_indices)  # in-place
 
         x_shuffled = X_train[train_indices, :]
@@ -153,7 +119,7 @@ if len(sys.argv) > 1:
         for step, (x_batch_train, y_batch_train) in enumerate(dataset_batched):
             with tf.GradientTape() as tape:
                 y_pred = model(x_batch_train, training=True)  # Forward pass
-                loss = asymMSE(y_batch_train, y_pred)
+                loss = asymMSE(y_batch_train, y_pred, numOut, lossFactor)
                 epoch_accuracy.update_state(y_batch_train, y_pred)
 
                 # accumulate data
@@ -274,8 +240,8 @@ if len(sys.argv) > 1:
                         [w.numpy() for w in model.layers[-1].weights]
                     )
 
-        else:
-            print(f"safe region test passed, interval was {output_interval}")
+            else:
+                print(f"safe region test passed, interval was {output_interval}")
 
         # Logging outputs
         with open("projection_acas_july6_coc.pickle", "wb") as f:
