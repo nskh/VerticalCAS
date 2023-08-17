@@ -6,6 +6,7 @@ import h5py
 import numpy as np
 import tensorflow as tf
 import keras
+from keras.callbacks import CSVLogger, TensorBoard
 from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, Activation
 from keras.optimizers import Adamax, Nadam
@@ -22,7 +23,7 @@ ver = 4  # Neural network version
 hu = 45  # Number of hidden units in each hidden layer in network
 saveEvery = 3  # Epoch frequency of saving
 totalEpochs = 20  # Total number of training epochs
-BATCH_SIZE = 2**8
+BATCH_SIZE = 2**12
 EPOCH_TO_PROJECT = 5
 lossFactor = 40.0
 learningRate = 0.0003
@@ -43,12 +44,18 @@ advisories = {
     "SDES2500": 7,
     "SCL2500": 8,
 }
+
 ##########################
 
 
 # The previous RA should be given as a command line input
 if len(sys.argv) > 1:
     pra = int(sys.argv[1])
+
+    if not os.path.exists(os.path.join(config["Paths"]["logs_dir"], "trainSafeVertCAS")):
+        os.makedirs(os.path.join(config["Paths"]["logs_dir"], "trainSafeVertCAS"))
+    logfile_path = os.path.join(config["Paths"]["logs_dir"], "trainSafeVertCAS", f"log_pra{pra}.csv")
+    csv_logger = CSVLogger(logfile_path, append=True, separator=",")
 
     X_train, Q, means, ranges, min_inputs, max_inputs = load_training_data(pra, trainingDataFiles, ver)
 
@@ -62,7 +69,12 @@ if len(sys.argv) > 1:
     epoch = saveEvery
     # TODO epoch numbering is wonky here
     while epoch <= totalEpochs:
-        model.fit(X_train, Q, epochs=saveEvery, batch_size=2**8, shuffle=True)
+        model.fit(X_train,
+                  Q,
+                  epochs=saveEvery,
+                  batch_size=BATCH_SIZE,
+                  shuffle=True,
+                  callbacks=[csv_logger])
         saveFile = nnetFiles % (pra, ver, epoch)
         saveNNet(model, saveFile, means, ranges, min_inputs, max_inputs)
         epoch += saveEvery
