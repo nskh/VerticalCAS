@@ -23,7 +23,7 @@ ver = 4  # Neural network version
 hu = 45  # Number of hidden units in each hidden layer in network
 saveEvery = 3  # Epoch frequency of saving
 totalEpochs = 20  # Total number of training epochs
-BATCH_SIZE = 2**12
+BATCH_SIZE = 2**13
 EPOCH_TO_PROJECT = 5
 lossFactor = 40.0
 learningRate = 0.0003
@@ -51,9 +51,10 @@ advisories = {
 # The previous RA should be given as a command line input
 if len(sys.argv) > 1:
     pra = int(sys.argv[1])
-
     if not os.path.exists(os.path.join(config["Paths"]["logs_dir"], "trainSafeVertCAS")):
         os.makedirs(os.path.join(config["Paths"]["logs_dir"], "trainSafeVertCAS"))
+    if os.path.exists(os.path.join(config["Paths"]["logs_dir"], "trainSafeVertCAS", f"log_pra{pra}.csv")):
+        open(os.path.join(config["Paths"]["logs_dir"], "trainSafeVertCAS", f"log_pra{pra}.csv"), 'w').close()
     logfile_path = os.path.join(config["Paths"]["logs_dir"], "trainSafeVertCAS", f"log_pra{pra}.csv")
     csv_logger = CSVLogger(logfile_path, append=True, separator=",")
 

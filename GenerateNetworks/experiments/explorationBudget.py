@@ -73,6 +73,12 @@ advisories = {
 # The previous RA should be given as a command line input
 if len(sys.argv) > 1:
     pra = int(sys.argv[1])
+    if not os.path.exists(os.path.join(config["Paths"]["logs_dir"], "explorationBudget")):
+        os.makedirs(os.path.join(config["Paths"]["logs_dir"], "explorationBudget"))
+    if os.path.exists(os.path.join(config["Paths"]["logs_dir"], "explorationBudget", f"log_pra{pra}.csv")):
+        open(os.path.join(config["Paths"]["logs_dir"], "explorationBudget", f"log_pra{pra}.csv"), 'w').close()
+    logfile_path = os.path.join(config["Paths"]["logs_dir"], "explorationBudget", f"log_pra{pra}.csv")
+
     X_train, Q, means, ranges, min_inputs, max_inputs = load_training_data(pra, trainingDataFiles, ver)
 
     N, numOut = Q.shape
@@ -112,11 +118,16 @@ if len(sys.argv) > 1:
         batch_losses = []
         batch_accuracy_list = []
         epoch_accuracy = keras.metrics.CategoricalAccuracy()
+        epoch_loss = 0
         for step, (x_batch_train, y_batch_train) in enumerate(dataset_batched):
+            # Use this to short circuit code to test logging
+            # if step == 10:
+                # break
             with tf.GradientTape() as tape:
                 y_pred = model(x_batch_train, training=True)  # Forward pass
                 loss = asymMSE(y_batch_train, y_pred, numOut, lossFactor)
                 epoch_accuracy.update_state(y_batch_train, y_pred)
+                epoch_loss += loss
 
                 # accumulate data
                 batch_losses.append(loss.numpy())
@@ -195,28 +206,43 @@ if len(sys.argv) > 1:
         #     print(f"{outputVars[the_max_var_idx]} - {outputVars[i]} < 0")
         #     network.addInequality([outputVars[the_max_var_idx], outputVars[i]], [1, -1], 0)
 
+        safe = None
+
         _, vals, stats = network.solve("marabou.log")
         if vals is None:
             print("UNSAT. So safe region test passed.")
             last_safe_weights = model.get_weights()
             last_safe_epoch = epoch
             num_unsafe_epochs = 0
+            safe = True
         else:
             print(f"safe region test FAILED, counterexample {vals}")
             num_unsafe_epochs += 1
+            safe = False
+
+        reset = False
 
         if num_unsafe_epochs == 10:
             print("Exploration budget exhausted.")
             print("Restarting training from last safe epoch.")
             model.set_weights(last_safe_weights)
             num_unsafe_epochs = 0
-        else:
-            model.compiled_metrics.update_state(y, y_pred)
+            reset = True
+        # else:
+            # model.compiled_metrics.update_state(y, y_pred)
 
-        with open("exploration_budget_acas.pickle", "wb") as f:
-            data = {
-                "accuracies": epoch_accuracies,
-                "losses": epoch_losses,
-                "weights_before_projection": weights_before_projection,
-            }
-            pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+        log_exploration_budget(
+            logfile_path,
+            epoch,
+            epoch_accuracy,
+            epoch_loss,
+            safe,
+            reset)
+
+        # with open("exploration_budget_acas.pickle", "wb") as f:
+        #     data = {
+        #         "accuracies": epoch_accuracies,
+        #         "losses": epoch_losses,
+        #         "weights_before_projection": weights_before_projection,
+        #     }
+        #     pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)

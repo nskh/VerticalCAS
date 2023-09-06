@@ -14,3 +14,6 @@ GenerateNetworks/Marabou
 config.ini
 *.egg-info
 *.log
+GenerateNetworks/experiments/tmp
+GenerateNetworks/alpha-beta-CROWN
+logs/

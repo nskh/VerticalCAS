@@ -1,9 +1,22 @@
 name: vertical-cas-env
 channels:
+  - gurobi
+  - pytorch
   - defaults
 dependencies:
       - matplotlib
       - numpy
       - onnxruntime
       - tensorflow
+      - gurobi
+      - pytorch
+      - pyyaml
+      - appdirs
+      - tqdm
+      - torchvision
+      - pandas
+      - sortedcontainers
+      - psutil
+      - pip:
+          - onnx2pytorch
 prefix: /opt/homebrew/Caskroom/miniconda/base/envs/vertical-cas-env

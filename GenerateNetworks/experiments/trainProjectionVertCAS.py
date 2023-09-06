@@ -83,6 +83,13 @@ relative = False
 # The previous RA should be given as a command line input
 if len(sys.argv) > 1:
     pra = int(sys.argv[1])
+    if not os.path.exists(os.path.join(config["Paths"]["logs_dir"], "trainProjectionVertCAS")):
+        os.makedirs(os.path.join(config["Paths"]["logs_dir"], "trainProjectionVertCAS"))
+    if os.path.exists(os.path.join(config["Paths"]["logs_dir"], "trainProjectionVertCAS", f"log_pra{pra}.csv")):
+        open(os.path.join(config["Paths"]["logs_dir"], "trainProjectionVertCAS", f"log_pra{pra}.csv"), 'w').close()
+    logfile_path = os.path.join(config["Paths"]["logs_dir"], "trainProjectionVertCAS", f"log_pra{pra}.csv")
+
+
     X_train, Q, means, ranges, min_inputs, max_inputs = load_training_data(pra, trainingDataFiles, ver)
 
     N, numOut = Q.shape
@@ -116,11 +123,15 @@ if len(sys.argv) > 1:
         batch_losses = []
         batch_accuracy_list = []
         epoch_accuracy = keras.metrics.CategoricalAccuracy()
+        epoch_loss = 0
         for step, (x_batch_train, y_batch_train) in enumerate(dataset_batched):
+            # if step == 10:
+                # break
             with tf.GradientTape() as tape:
                 y_pred = model(x_batch_train, training=True)  # Forward pass
                 loss = asymMSE(y_batch_train, y_pred, numOut, lossFactor)
                 epoch_accuracy.update_state(y_batch_train, y_pred)
+                epoch_loss += loss.numpy()
 
                 # accumulate data
                 batch_losses.append(loss.numpy())
@@ -139,6 +150,8 @@ if len(sys.argv) > 1:
 
         epoch_accuracies.append(batch_accuracy_list)
         epoch_losses.append(batch_losses)
+
+        projected = False
 
         weights_before_projection.append([w.numpy() for w in model.layers[-1].weights])
 
@@ -239,16 +252,24 @@ if len(sys.argv) > 1:
                     weights_after_projection.append(
                         [w.numpy() for w in model.layers[-1].weights]
                     )
+                    projected = True
 
             else:
                 print(f"safe region test passed, interval was {output_interval}")
 
+            log_projection(
+                logfile_path,
+                epoch,
+                epoch_accuracy,
+                epoch_loss,
+                projected
+            )
         # Logging outputs
-        with open("projection_acas_july6_coc.pickle", "wb") as f:
-            data = {
-                "accuracies": epoch_accuracies,
-                "losses": epoch_losses,
-                "weights_before_projection": weights_before_projection,
-                "weights_after_projection": weights_after_projection,
-            }
-            pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+        # with open("projection_acas_july6_coc.pickle", "wb") as f:
+        #     data = {
+        #         "accuracies": epoch_accuracies,
+        #         "losses": epoch_losses,
+        #         "weights_before_projection": weights_before_projection,
+        #         "weights_after_projection": weights_after_projection,
+        #     }
+        #     pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
