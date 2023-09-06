@@ -57,3 +57,26 @@ def create_model(numOut, hu, lr, lossFactor, opt):
         optimizer=opt,
         metrics=["accuracy"])
     return model
+
+def log_exploration_budget(
+        filename,
+        epoch,
+        epoch_accs,
+        epoch_losses,
+        safe,
+        reset):
+    with open(filename, "a+") as f:
+        if os.path.getsize(filename) == 0:
+            f.write("epoch,acc,loss,safe,reset\n")
+        f.write(f"{epoch},{epoch_accs.result().numpy()},{epoch_losses},{safe},{reset}\n")
+
+def log_projection(
+        filename,
+        epoch,
+        epoch_accs,
+        epoch_losses,
+        projected):
+    with open(filename, "a+") as f:
+        if os.path.getsize(filename) == 0:
+            f.write("epoch,acc,loss,projected\n")
+        f.write(f"{epoch},{epoch_accs.result().numpy()},{epoch_losses},{projected}\n")
