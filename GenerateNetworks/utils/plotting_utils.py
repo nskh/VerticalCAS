@@ -134,9 +134,9 @@ def denormalize_point(p: np.array):
 
 def normalize_interval(ivls: list):
     if type(ivls) is list:
-        assert len(ivls) == 4
+        assert len(ivls) == 2
     new_ivls = []
-    for i in range(4):
+    for i in range(2):
         new_ivls.append((ivls[i] - MEAN[i]) / RANGES[i])
     return new_ivls
 
@@ -175,8 +175,7 @@ def plot_policy(
             x_grid = np.vstack([x_grid, grid_component])
         else:
             x_grid = grid_component
-
-    y_pred = model.predict(normalize_point(x_grid))
+    y_pred = model.predict(np.delete(normalize_point(x_grid), [1,2], 1))
     advisory_idxs = np.argmax(y_pred, axis=1)
 
     # dict indexed by color/advisory of all points
@@ -200,7 +199,7 @@ def plot_policy(
     # add intervals
     if intervals is not None:
         ax = fig.gca()
-        tau_interval = intervals[3]  # x-coord
+        tau_interval = intervals[-1]  # x-coord
         h_interval = intervals[0]  # y-coord
         out_rect = matplotlib.patches.Rectangle(
             (tau_interval[0].inf, h_interval[0].inf),  # lower left anchor
@@ -242,7 +241,7 @@ def plot_policy(
         # add intervals
         if intervals is not None:
             ax = fig.gca()
-            tau_interval = intervals[3]  # x-coord
+            tau_interval = intervals[-1]  # x-coord
             h_interval = intervals[0]  # y-coord
             out_rect = matplotlib.patches.Rectangle(
                 (tau_interval[0].inf, h_interval[0].inf),  # lower left anchor
