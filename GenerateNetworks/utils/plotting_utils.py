@@ -28,8 +28,8 @@ action_names = [
     "SCL2500",
 ]
 
-MEAN = np.array([0.0, 0.0, 0.0, 20.0])
-RANGES = np.array([16000.0, 200.0, 200.0, 40.0])
+MEAN = np.array([0.0, 20.0])
+RANGES = np.array([16000.0, 40.0])
 
 
 def plot_loss(history):
@@ -166,8 +166,6 @@ def plot_policy(
         grid_component = np.vstack(
             [
                 hs,
-                np.ones(hs.shape) * vo,
-                np.ones(hs.shape) * vi,
                 np.ones(hs.shape) * tau,
             ]
         ).T
@@ -175,7 +173,8 @@ def plot_policy(
             x_grid = np.vstack([x_grid, grid_component])
         else:
             x_grid = grid_component
-    y_pred = model.predict(np.delete(normalize_point(x_grid), [1,2], 1))
+    y_pred = model.predict(normalize_point(x_grid))
+    # y_pred = model.predict(x_grid)
     advisory_idxs = np.argmax(y_pred, axis=1)
 
     # dict indexed by color/advisory of all points
@@ -183,7 +182,7 @@ def plot_policy(
     ys = {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: []}
 
     for i, advisory_idx in enumerate(advisory_idxs):
-        scatter_x = x_grid[i, 3]  # tau
+        scatter_x = x_grid[i, -1]  # tau
         scatter_y = x_grid[i, 0]  # h
         xs[advisory_idx].append(scatter_x)
         ys[advisory_idx].append(scatter_y)
