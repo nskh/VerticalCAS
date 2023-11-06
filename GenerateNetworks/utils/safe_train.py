@@ -1,5 +1,4 @@
 import tensorflow as tf
-from tensorflow.keras import layers
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -11,6 +10,9 @@ import itertools
 from interval import interval, inf
 
 # from safe_model import SafeModel
+
+MEAN = np.array([0.0, 0.0, 0.0, 20.0])
+RANGES = np.array([16000.0, 200.0, 200.0, 40.0])
 
 
 def generate_data(NOISE_STD=2, M=0.5, B=5, xmin=5, xmax=55, n=30):
@@ -173,3 +175,24 @@ def check_max_score(output_interval, max_idx):
             return False
 
     return True
+
+
+def normalize_point(x: np.array):
+    if type(x) is list:
+        x = np.array(x)
+    return (x - MEAN) / RANGES
+
+
+def denormalize_point(p: np.array):
+    if type(p) is list:
+        p = np.array(p)
+    return p * RANGES + MEAN
+
+
+def normalize_interval(ivls: list):
+    if type(ivls) is list:
+        assert len(ivls) == 4
+    new_ivls = []
+    for i in range(4):
+        new_ivls.append((ivls[i] - MEAN[i]) / RANGES[i])
+    return new_ivls

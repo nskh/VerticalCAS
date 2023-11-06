@@ -28,8 +28,7 @@ action_names = [
     "SCL2500",
 ]
 
-MEAN = np.array([0.0, 0.0, 0.0, 20.0])
-RANGES = np.array([16000.0, 200.0, 200.0, 40.0])
+from utils.safe_train import normalize_point
 
 
 def plot_loss(history):
@@ -120,27 +119,6 @@ def plot_intervals(
     plt.show()
 
 
-def normalize_point(x: np.array):
-    if type(x) is list:
-        x = np.array(x)
-    return (x - MEAN) / RANGES
-
-
-def denormalize_point(p: np.array):
-    if type(p) is list:
-        p = np.array(p)
-    return p * RANGES + MEAN
-
-
-def normalize_interval(ivls: list):
-    if type(ivls) is list:
-        assert len(ivls) == 4
-    new_ivls = []
-    for i in range(4):
-        new_ivls.append((ivls[i] - MEAN[i]) / RANGES[i])
-    return new_ivls
-
-
 def plot_policy(
     model: tf.keras.Model,
     filename: str = None,
@@ -150,16 +128,18 @@ def plot_policy(
     vi: float = 0,
     use_sisl_colors: bool = False,
     intervals: list = None,
-    intervalcolor: str = None,
+    intervalcolors: str = None,
+    intervalnames: list[str] = None,
     title: str = None,
+    maxy=5000,
 ):
     x_grid = None
     taus = np.linspace(0, 40, 81)
     hs = np.hstack(
         [
-            np.linspace(-5000, -2000, 20),
+            np.linspace(-maxy, -2000, 20),
             np.linspace(-2000, 2000, 80),
-            np.linspace(2000, 5000, 20),
+            np.linspace(2000, maxy, 20),
         ]
     )
     for tau in taus:
@@ -200,19 +180,23 @@ def plot_policy(
     # add intervals
     if intervals is not None:
         ax = fig.gca()
-        tau_interval = intervals[3]  # x-coord
-        h_interval = intervals[0]  # y-coord
-        out_rect = matplotlib.patches.Rectangle(
-            (tau_interval[0].inf, h_interval[0].inf),  # lower left anchor
-            tau_interval[0].sup - tau_interval[0].inf,  # width
-            h_interval[0].sup - h_interval[0].inf,  # height
-            facecolor=intervalcolor if intervalcolor is not None else "b",
-            alpha=0.3,
-            edgecolor=intervalcolor if intervalcolor is not None else "b",
-        )
-        ax.add_patch(out_rect)
+        for i, ivl in enumerate(intervals):
+            ivl_xs = ivl[0]
+            ivl_ys = ivl[1]
+            out_rect = matplotlib.patches.Rectangle(
+                (ivl_xs[0], ivl_ys[0]),  # lower left anchor
+                ivl_xs[1] - ivl_xs[0],  # width
+                ivl_ys[1] - ivl_ys[0],  # height
+                facecolor=intervalcolors[i] if intervalcolors is not None else "b",
+                alpha=0.3,
+                edgecolor=intervalcolors[i] if intervalcolors is not None else "b",
+            )
+            ax.add_patch(out_rect)
 
-    plt.legend(action_names + ["Input Region"], loc="upper right")
+    plt.legend(
+        action_names + intervalnames if intervalnames is not None else action_names,
+        loc="upper right",
+    )
 
     plt.xlabel("Tau (sec)")
     plt.ylabel("h (ft)")
@@ -242,20 +226,25 @@ def plot_policy(
         # add intervals
         if intervals is not None:
             ax = fig.gca()
-            tau_interval = intervals[3]  # x-coord
-            h_interval = intervals[0]  # y-coord
-            out_rect = matplotlib.patches.Rectangle(
-                (tau_interval[0].inf, h_interval[0].inf),  # lower left anchor
-                tau_interval[0].sup - tau_interval[0].inf,  # width
-                h_interval[0].sup - h_interval[0].inf,  # height
-                facecolor=intervalcolor if intervalcolor is not None else "b",
-                alpha=0.3,
-                edgecolor=intervalcolor if intervalcolor is not None else "b",
-            )
-            ax.add_patch(out_rect)
+            for i, ivl in enumerate(intervals):
+                xs = ivl[0]
+                ys = ivl[1]
+                out_rect = matplotlib.patches.Rectangle(
+                    (xs[0], ys[0]),  # lower left anchor
+                    xs[1] - xs[0],  # width
+                    ys[1] - ys[0],  # height
+                    facecolor=intervalcolors[i] if intervalcolors is not None else "b",
+                    alpha=0.3,
+                    edgecolor=intervalcolors[i] if intervalcolors is not None else "b",
+                )
+                ax.add_patch(out_rect)
             plt.xlim([0, 40])
 
-        plt.legend(action_names + ["Input Region"], loc="upper right")
+        plt.legend(
+            action_names + intervalnames if intervalnames is not None else action_names,
+            loc="upper right",
+        )
+
         plt.xlabel("Tau (sec)")
         plt.ylabel("h (ft)")
         if title is None:

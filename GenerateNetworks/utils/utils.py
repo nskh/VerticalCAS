@@ -4,19 +4,15 @@ import configparser
 import h5py
 import numpy as np
 import tensorflow as tf
-import keras
-from keras.models import Sequential, load_model
-from keras.layers import Dense, Dropout, Activation
-from keras.optimizers import Adamax, Nadam
-from interval import interval, inf
+from keras.models import Sequential
+from keras.layers import Dense
 
-from GenerateNetworks.writeNNet import saveNNet
-from GenerateNetworks.utils.safe_train import propagate_interval
 
 def load_config():
     config = configparser.ConfigParser()
     config.read(os.environ.get("CONFIG_INI_PATH"))
     return config
+
 
 # NOTE(nskh): from HorizontalCAS which was updated to use TF
 def asymMSE(y_true, y_pred, numOut, lossFactor):
@@ -33,6 +29,7 @@ def asymMSE(y_true, y_pred, numOut, lossFactor):
     loss = tf.where(d_sub > 0, c, d) + tf.where(d_opt > 0, a, b)
     return tf.reduce_mean(loss)
 
+
 def load_training_data(pra, trainingDataFiles, ver):
     print("Loading Data for VertCAS, pra %02d, Network Version %d" % (pra, ver))
     with h5py.File(trainingDataFiles % pra, "r") as f:
@@ -46,6 +43,7 @@ def load_training_data(pra, trainingDataFiles, ver):
         print(f"max inputs: {max_inputs}")
     return X_train, Q, means, ranges, min_inputs, max_inputs
 
+
 def create_model(numOut, hu, lr, lossFactor, opt):
     model = Sequential()
     model.add(Dense(hu, activation="relu", input_dim=4))
@@ -53,7 +51,8 @@ def create_model(numOut, hu, lr, lossFactor, opt):
         model.add(Dense(hu, activation="relu"))
     model.add(Dense(numOut))
     model.compile(
-        loss=partial(asymMSE, numOut = numOut, lossFactor = lossFactor),
+        loss=partial(asymMSE, numOut=numOut, lossFactor=lossFactor),
         optimizer=opt,
-        metrics=["accuracy"])
+        metrics=["accuracy"],
+    )
     return model
