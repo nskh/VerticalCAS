@@ -128,6 +128,27 @@ def propagate_interval(input_interval, model, graph=False, verbose=False):
                     current_interval[interval_idx] &= interval[0, inf]
                     if current_interval[interval_idx] == interval():
                         current_interval[interval_idx] = interval[0, 0]
+            # check depending on instantiation
+            elif config["activation"] == "leaky_relu" or (
+                type(config["activation"]) is dict
+                and config["activation"]["class_name"] == "LeakyReLU"
+            ):
+                pass
+                if type(config["activation"]) is str:
+                    alpha = 0.3  # default value
+                elif type(config["activation"]) is dict:
+                    alpha = config["activation"]["config"]["alpha"]
+                else:
+                    raise NotImplementedError(f"Could not find alpha for leaky relu")
+
+                # as above, can't do a for-in here since that does a copy
+                for interval_idx in range(len(current_interval)):
+                    lower_bound = alpha * current_interval[interval_idx][0].inf
+                    current_interval[interval_idx] &= interval[lower_bound, inf]
+
+                    # TODO figure out if we need this?
+                    # if current_interval[interval_idx] == interval():
+                    #     current_interval[interval_idx] = interval[0, 0]
             elif config["activation"] == "linear":
                 # Do nothing, just pass interval through
                 pass
