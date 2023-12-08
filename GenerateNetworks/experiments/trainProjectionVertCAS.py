@@ -18,9 +18,9 @@ from GenerateNetworks.utils.safe_train import (
     propagate_interval,
     check_intervals,
     check_max_score,
+    normalize_interval,
 )
 from GenerateNetworks.utils.projection_utils import project_weights
-from GenerateNetworks.utils.plotting_utils import normalize_point, normalize_interval
 from GenerateNetworks.utils.utils import *
 
 config = load_config()
@@ -34,10 +34,12 @@ EPOCH_TO_PROJECT = 2
 lossFactor = 40.0
 learningRate = 0.0003
 
-trainingDataFiles = (
-    os.path.join(config['Paths']["training_data_dir"], "VertCAS_TrainingData_v2_%02d.h5")
+trainingDataFiles = os.path.join(
+    config["Paths"]["training_data_dir"], "VertCAS_TrainingData_v2_%02d.h5"
 )
-nnetFiles = os.path.join(config["Paths"]["networks_dir"], "ProjectionVertCAS_pra%02d_v%d_45HU_%03d.nnet")
+nnetFiles = os.path.join(
+    config["Paths"]["networks_dir"], "ProjectionVertCAS_pra%02d_v%d_45HU_%03d.nnet"
+)
 
 COC_INTERVAL = [
     interval[-1000, -900],
@@ -83,7 +85,9 @@ relative = False
 # The previous RA should be given as a command line input
 if len(sys.argv) > 1:
     pra = int(sys.argv[1])
-    X_train, Q, means, ranges, min_inputs, max_inputs = load_training_data(pra, trainingDataFiles, ver)
+    X_train, Q, means, ranges, min_inputs, max_inputs = load_training_data(
+        pra, trainingDataFiles, ver
+    )
 
     N, numOut = Q.shape
     print(f"Setting up model with {numOut} outputs and {N} training examples")
@@ -162,7 +166,7 @@ if len(sys.argv) > 1:
                     intervals_to_project = []
                     # go through all intervals, find max upper bound
                     max_upper_bound = None
-                    for advisory_interval, i in enumerate(output_interval):
+                    for i, advisory_interval in enumerate(output_interval):
                         if i == advisories["DES1500"]:
                             continue
                         else:
@@ -180,7 +184,9 @@ if len(sys.argv) > 1:
                     biases_np = weights_tf[1].numpy()
 
                     for idx in intervals_to_project:
-                        weights_to_project = np.hstack([weights_np[:, idx], biases_np[idx]])
+                        weights_to_project = np.hstack(
+                            [weights_np[:, idx], biases_np[idx]]
+                        )
                         proj = project_weights(
                             interval[max_upper_bound, max_upper_bound + INTERVAL_WIDTH],
                             penultimate_interval,
@@ -222,9 +228,13 @@ if len(sys.argv) > 1:
                     biases_np = weights_tf[1].numpy()
 
                     for idx in intervals_to_project:
-                        weights_to_project = np.hstack([weights_np[:, idx], biases_np[idx]])
+                        weights_to_project = np.hstack(
+                            [weights_np[:, idx], biases_np[idx]]
+                        )
                         proj = project_weights(
-                            desired_interval[idx], penultimate_interval, weights_to_project
+                            desired_interval[idx],
+                            penultimate_interval,
+                            weights_to_project,
                         )
                         weights_np[:, idx] = proj[:-1]
                         biases_np[idx] = proj[-1]
