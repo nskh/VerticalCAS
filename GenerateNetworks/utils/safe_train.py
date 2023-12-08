@@ -141,12 +141,24 @@ def propagate_interval(input_interval, model, graph=False, verbose=False):
                 else:
                     raise NotImplementedError(f"Could not find alpha for leaky relu")
 
-                # as above, can't do a for-in here since that does a copy
+                # as above, can't do a for-in here since that performs
+                #  an implict copy of each interval, apparently
                 for interval_idx in range(len(current_interval)):
-                    lower_bound = alpha * current_interval[interval_idx][0].inf
-                    current_interval[interval_idx] &= interval[lower_bound, inf]
-
-                    # TODO figure out if we need this?
+                    lower_bound = current_interval[interval_idx][0].inf
+                    upper_bound = current_interval[interval_idx][0].sup
+                    if upper_bound < 0 and lower_bound < 0:
+                        # multiply both bounds by alpha if both negative
+                        current_interval[interval_idx] = interval[
+                            lower_bound * alpha, upper_bound * alpha
+                        ]
+                    else:
+                        # otherwise, clip lower bound by alpha*lower_bound
+                        # does nothing if lower_bound is positive
+                        current_interval[interval_idx] &= interval[
+                            lower_bound * alpha, inf
+                        ]
+                    # not necessary because of both-negative handling above
+                    # leftover from regular relu
                     # if current_interval[interval_idx] == interval():
                     #     current_interval[interval_idx] = interval[0, 0]
             elif config["activation"] == "linear":
